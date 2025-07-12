@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorful Circles - p5.js</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <h1>🌈 Hilbert Cube 🌈</h1>
+    
+    <!-- p5.js Core Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <!-- p5.js WebGL Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/addons/p5.webgl.min.js"></script>
+    
+    <script>
+        // 3D cube variables
+        let angleX = 0;
+        let angleY = 0;
+        let angleZ = 0;
+        let rotationSpeed = 0.02;
+        
+        // Hilbert curve variables
+        let hilbertPoints = [];
+        let hilbertOrder = 4;
+        let hilbertSize = 80; // Size of the Hilbert curve on the face
+        
+        // Back face Hilbert curve variables
+        let backHilbertPoints = [];
+        let backHilbertOrder = 5;
+        let backHilbertSize = 80;
+        
+        function setup() {
+            createCanvas(800, 600, WEBGL);
+            background(26, 26, 26);
+            generateHilbertCurve();
+            generateBackHilbertCurve();
+        }
+        
+        function draw() {
+            background(26, 26, 26);
+            
+            // Set up lighting
+            ambientLight(60, 60, 60);
+            pointLight(255, 255, 255, 0, -200, 100);
+            pointLight(255, 100, 100, 200, 200, 100);
+            pointLight(100, 100, 255, -200, 200, 100);
+            
+            // Move to center
+            translate(0, 0, 0);
+            
+            // Rotate the cube
+            rotateX(angleX);
+            rotateY(angleY);
+            rotateZ(angleZ);
+            
+            // Draw the cube
+            push();
+            noStroke();
+            
+            // Front face (red) with Hilbert curve
+            fill(255, 0, 0, 200);
+            beginShape();
+            vertex(-100, -100, 100);
+            vertex(100, -100, 100);
+            vertex(100, 100, 100);
+            vertex(-100, 100, 100);
+            endShape(CLOSE);
+            
+            // Draw Hilbert curve on front face
+            stroke(255, 255, 0); // Bright yellow for contrast
+            strokeWeight(2);
+            noFill();
+            beginShape();
+            // Find the bounds of the Hilbert curve
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (let point of hilbertPoints) {
+                minX = min(minX, point.x);
+                maxX = max(maxX, point.x);
+                minY = min(minY, point.y);
+                maxY = max(maxY, point.y);
+            }
+            // Calculate curve unit based on order
+            let curveUnit = 200 / (pow(2, hilbertOrder) - 1);
+            let margin = curveUnit;
+            let curveSize = 200 - 2 * margin;
+            for (let i = 0; i < hilbertPoints.length; i++) {
+                let point = hilbertPoints[i];
+                // Map Hilbert curve with 1 curve unit margin on all sides, centered
+                let x = map(point.x, minX, maxX, -curveSize/2, curveSize/2);
+                let y = map(point.y, minY, maxY, -curveSize/2, curveSize/2);
+                vertex(x, y, 100);
+            }
+            endShape();
+            
+            // Back face (green)
+            fill(0, 255, 0, 200);
+            beginShape();
+            vertex(-100, -100, -100);
+            vertex(100, -100, -100);
+            vertex(100, 100, -100);
+            vertex(-100, 100, -100);
+            endShape(CLOSE);
+            
+            // Back face (green) with Hilbert curve
+            fill(0, 255, 0, 200);
+            beginShape();
+            vertex(-100, -100, -100);
+            vertex(100, -100, -100);
+            vertex(100, 100, -100);
+            vertex(-100, 100, -100);
+            endShape(CLOSE);
+            
+            // Draw Hilbert curve on back face
+            stroke(255, 0, 255); // Bright magenta for contrast
+            strokeWeight(2);
+            noFill();
+            beginShape();
+            // Find the bounds of the back Hilbert curve
+            let backMinX = Infinity, backMaxX = -Infinity, backMinY = Infinity, backMaxY = -Infinity;
+            for (let point of backHilbertPoints) {
+                backMinX = min(backMinX, point.x);
+                backMaxX = max(backMaxX, point.x);
+                backMinY = min(backMinY, point.y);
+                backMaxY = max(backMaxY, point.y);
+            }
+            // Calculate curve unit based on order
+            let backCurveUnit = 200 / (pow(2, backHilbertOrder) - 1);
+            let backMargin = backCurveUnit;
+            let backCurveSize = 200 - 2 * backMargin;
+            for (let i = 0; i < backHilbertPoints.length; i++) {
+                let point = backHilbertPoints[i];
+                // Map Hilbert curve with 1 curve unit margin on all sides, centered
+                let x = map(point.x, backMinX, backMaxX, -backCurveSize/2, backCurveSize/2);
+                let y = map(point.y, backMinY, backMaxY, -backCurveSize/2, backCurveSize/2);
+                vertex(x, y, -100);
+            }
+            endShape();
+            
+            // Right face (blue)
+            fill(0, 0, 255, 200);
+            beginShape();
+            vertex(100, -100, -100);
+            vertex(100, -100, 100);
+            vertex(100, 100, 100);
+            vertex(100, 100, -100);
+            endShape(CLOSE);
+            
+            // Left face (yellow)
+            fill(255, 255, 0, 200);
+            beginShape();
+            vertex(-100, -100, -100);
+            vertex(-100, -100, 100);
+            vertex(-100, 100, 100);
+            vertex(-100, 100, -100);
+            endShape(CLOSE);
+            
+            // Top face (magenta)
+            fill(255, 0, 255, 200);
+            beginShape();
+            vertex(-100, -100, -100);
+            vertex(100, -100, -100);
+            vertex(100, -100, 100);
+            vertex(-100, -100, 100);
+            endShape(CLOSE);
+            
+            // Bottom face (cyan)
+            fill(0, 255, 255, 200);
+            beginShape();
+            vertex(-100, 100, -100);
+            vertex(100, 100, -100);
+            vertex(100, 100, 100);
+            vertex(-100, 100, 100);
+            endShape(CLOSE);
+            
+            pop();
+            
+            // Update rotation angles
+            angleX += rotationSpeed;
+            angleY += rotationSpeed * 1.5;
+            angleZ += rotationSpeed * 0.5;
+            
+            // Add some text (2D overlay)
+            push();
+            translate(-width/2, -height/2);
+            fill(255);
+            noStroke();
+            textSize(16);
+            text('Rotating 3D Cube', 10, 30);
+            text('Click to change rotation speed!', 10, 50);
+            text('Speed: ' + (rotationSpeed * 100).toFixed(1), 10, 70);
+            pop();
+        }
+        
+        function mousePressed() {
+            // Change rotation speed
+            rotationSpeed = random(0.01, 0.05);
+        }
+        
+        function mouseDragged() {
+            // Manual rotation control
+            angleX += (mouseY - pmouseY) * 0.01;
+            angleY += (mouseX - pmouseX) * 0.01;
+        }
+        
+        function generateHilbertCurve() {
+            hilbertPoints = [];
+            
+            // L-system parameters for Hilbert curve
+            let axiom = "A";
+            let rules = {
+                "A": "+BF-AFA-FB+",
+                "B": "-AF+BFB+FA-"
+            };
+            
+            // Generate the string using L-system
+            let current = axiom;
+            for (let i = 0; i < hilbertOrder; i++) {
+                let next = "";
+                for (let char of current) {
+                    if (char in rules) {
+                        next += rules[char];
+                    } else {
+                        next += char;
+                    }
+                }
+                current = next;
+            }
+            
+            // Convert L-system string to points
+            let x = 0, y = 0;
+            let angle = 0;
+            let step = hilbertSize / (pow(2, hilbertOrder) - 1);
+            
+            hilbertPoints.push({x: x, y: y});
+            
+            for (let char of current) {
+                switch (char) {
+                    case "F":
+                        // Move forward
+                        x += step * cos(angle);
+                        y += step * sin(angle);
+                        hilbertPoints.push({x: x, y: y});
+                        break;
+                    case "+":
+                        // Turn left 90 degrees
+                        angle += PI/2;
+                        break;
+                    case "-":
+                        // Turn right 90 degrees
+                        angle -= PI/2;
+                        break;
+                    // A and B are ignored during drawing
+                }
+            }
+        }
+
+        function generateBackHilbertCurve() {
+            backHilbertPoints = [];
+            // L-system parameters for Hilbert curve
+            let axiom = "A";
+            let rules = {
+                "A": "+BF-AFA-FB+",
+                "B": "-AF+BFB+FA-"
+            };
+            // Generate the string using L-system
+            let current = axiom;
+            for (let i = 0; i < backHilbertOrder; i++) {
+                let next = "";
+                for (let char of current) {
+                    if (char in rules) {
+                        next += rules[char];
+                    } else {
+                        next += char;
+                    }
+                }
+                current = next;
+            }
+            // Convert L-system string to points
+            let x = 0, y = 0;
+            let angle = 0;
+            let step = backHilbertSize / (pow(2, backHilbertOrder) - 1);
+            backHilbertPoints.push({x: x, y: y});
+            for (let char of current) {
+                switch (char) {
+                    case "F":
+                        // Move forward
+                        x += step * cos(angle);
+                        y += step * sin(angle);
+                        backHilbertPoints.push({x: x, y: y});
+                        break;
+                    case "+":
+                        // Turn left 90 degrees
+                        angle += PI/2;
+                        break;
+                    case "-":
+                        // Turn right 90 degrees
+                        angle -= PI/2;
+                        break;
+                    // A and B are ignored during drawing
+                }
+            }
+        }
+    </script>
+
+
+This software is licensed under the GNU General Public License v3.0.
+
+Any use or derivative work must include visible attribution to the original author in both source and user-facing materials in the format:
+
+"adapted from @monkeywidget via https://github.com/monkeywidget/p5-sketches"
+
+</body>
+</html> 

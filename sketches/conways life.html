@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conway's Game of Life - Circles (p5.js)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #181818;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            text-align: center;
+            margin: 24px 0 8px 0;
+            font-size: 2rem;
+            letter-spacing: 1px;
+        }
+        #sketch-holder {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+        .info {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Conway's Game of Life (Circles)</h1>
+    <div class="info">Random initial state. Click to randomize. <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life" target="_blank" style="color:#6cf;">Rules</a></div>
+    <div id="sketch-holder"></div>
+    <!-- p5.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script>
+    // --- Game of Life with Circular Cells ---
+    const cols = 50;
+    const rows = 30;
+    const cellSize = 20;
+    let grid;
+    let next;
+    let running = true;
+
+    function setup() {
+        let w = cols * cellSize;
+        let h = rows * cellSize;
+        let cnv = createCanvas(w, h);
+        cnv.parent('sketch-holder');
+        frameRate(12);
+        initGrid();
+    }
+
+    function draw() {
+        background(24);
+        drawGrid();
+        if (running) {
+            computeNext();
+            swapGrids();
+        }
+    }
+
+    function mousePressed() {
+        // If mouse is inside the canvas, randomize
+        if (mouseX >= 0 && mouseX < width && mouseY >= 0 && mouseY < height) {
+            initGrid();
+        }
+    }
+
+    function initGrid() {
+        grid = [];
+        next = [];
+        for (let y = 0; y < rows; y++) {
+            grid[y] = [];
+            next[y] = [];
+            for (let x = 0; x < cols; x++) {
+                grid[y][x] = random() < 0.5 ? 1 : 0;
+                next[y][x] = 0;
+            }
+        }
+    }
+
+    function drawGrid() {
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                let cx = x * cellSize + cellSize / 2;
+                let cy = y * cellSize + cellSize / 2;
+                if (grid[y][x] === 1) {
+                    fill(80, 200, 255, 220);
+                    stroke(255);
+                    strokeWeight(1.5);
+                } else {
+                    fill(40, 40, 60, 60);
+                    stroke(80, 80, 120, 80);
+                    strokeWeight(1);
+                }
+                ellipse(cx, cy, cellSize * 0.8, cellSize * 0.8);
+            }
+        }
+    }
+
+    function computeNext() {
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                let neighbors = countNeighbors(grid, x, y);
+                let state = grid[y][x];
+                // Game of Life rules
+                if (state === 1 && (neighbors < 2 || neighbors > 3)) {
+                    next[y][x] = 0; // Dies
+                } else if (state === 0 && neighbors === 3) {
+                    next[y][x] = 1; // Born
+                } else {
+                    next[y][x] = state; // Stays the same
+                }
+            }
+        }
+    }
+
+    function countNeighbors(grid, x, y) {
+        let sum = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                let nx = x + dx;
+                let ny = y + dy;
+                if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                    sum += grid[ny][nx];
+                }
+            }
+        }
+        return sum;
+    }
+
+    function swapGrids() {
+        let temp = grid;
+        grid = next;
+        next = temp;
+    }
+    </script>
+
+This software is licensed under the GNU General Public License v3.0.
+
+Any use or derivative work must include visible attribution to the original author in both source and user-facing materials in the format:
+
+"adapted from @monkeywidget via https://github.com/monkeywidget/p5-sketches"
+
+</body>
+</html> 

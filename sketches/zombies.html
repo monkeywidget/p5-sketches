@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zombie Infection Simulation - p5.js</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+        .info {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+        #sketch-holder {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧟 Zombie Infection Simulation 🧟</h1>
+    <div class="info">
+        Controls: SPACE=Reset | S=Speed | P=Panic | G=Green Zombies | +/-=Population | Z=Freeze
+    </div>
+    <div id="sketch-holder"></div>
+    
+    <!-- p5.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.5.0/p5.min.js"></script>
+    
+    <script>
+    // Global variables
+    let freeze = 0;
+    let num = 1000;
+    let speed = 1;
+    let panic = 5;
+    let human, panichuman, zombie, wall;
+    let beings = [];
+    let maxBeings = 4000;
+    let walls = []; // Store wall positions to avoid redrawing
+    
+    class Being {
+        constructor() {
+            this.xpos = 0;
+            this.ypos = 0;
+            this.dir = int(random(4)) + 1;
+            this.type = 2; // 1=zombie, 2=human
+            this.active = 0;
+        }
+        
+        position() {
+            let ok = 0;
+            let border = 2;
+            while (ok < 100) {
+                this.xpos = int(random(width-1)) + 1;
+                this.ypos = int(random(height-1)) + 1;
+                
+                // Check if position is inside a building or within 2 pixels of a building
+                let insideBuilding = false;
+                for (let wall of walls) {
+                    if (this.xpos >= wall.x - border && this.xpos < wall.x + wall.w + border &&
+                        this.ypos >= wall.y - border && this.ypos < wall.y + wall.h + border) {
+                        insideBuilding = true;
+                        break;
+                    }
+                }
+                
+                // Only accept position if not inside a building or its border
+                if (!insideBuilding) {
+                    ok = 100;
+                }
+                ok++;
+            }
+        }
+        
+        infect(x, y) {
+            if (x == this.xpos && y == this.ypos) {
+                this.type = 1;
+            }
+        }
+        
+        infect() {
+            this.type = 1;
+        }
+        
+        uninfect() {
+            this.type = 2;
+        }
+        
+        move() {
+            let r = int(random(10));
+            let didMove = false;
+            if ((this.type == 2 && (this.active > 0 || r > panic)) || r == 1) {
+                
+                // Check if next position is clear (not a wall)
+                let nextX = this.xpos;
+                let nextY = this.ypos;
+                if (this.dir == 1) nextY--;
+                if (this.dir == 2) nextX++;
+                if (this.dir == 3) nextY++;
+                if (this.dir == 4) nextX--;
+                
+                // Check if next position is valid and not a wall (with 2-pixel border)
+                let border = 2;
+                if (nextX >= 1 && nextX < width - 1 && nextY >= 1 && nextY < height - 1) {
+                    // Check if not hitting a wall using efficient collision detection
+                    let canMove = true;
+                    
+                    // Check if next position overlaps with any wall
+                    for (let wall of walls) {
+                        if (nextX >= wall.x - border && nextX < wall.x + wall.w + border &&
+                            nextY >= wall.y - border && nextY < wall.y + wall.h + border) {
+                            canMove = false;
+                            break;
+                        }
+                    }
+                    
+                    if (canMove) {
+                        this.xpos = nextX;
+                        this.ypos = nextY;
+                        didMove = true;
+                    } else {
+                        this.dir = int(random(4)) + 1;
+                    }
+                } else {
+                    this.dir = int(random(4)) + 1;
+                }
+                
+                // Change direction occasionally
+                if (int(random(20)) == 1) {
+                    this.dir = int(random(4)) + 1;
+                }
+                
+                if (this.active > 0) this.active--;
+            }
+            
+            // Infection logic - zombies infect humans within a radius
+            if (this.type == 1) {
+                // Zombie logic - infect any human within 6 pixels
+                for (let i = 0; i < num; i++) {
+                    if (beings[i] && beings[i].type == 2) { // If human
+                        let dx = this.xpos - beings[i].xpos;
+                        let dy = this.ypos - beings[i].ypos;
+                        let distSq = dx * dx + dy * dy;
+                        if (distSq <= 36) { // 6 pixels radius
+                            beings[i].type = 1; // Turn into zombie
+                            // Debug log
+                            // Uncomment the next line to see infection events in the console
+                            // console.log(`Human ${i} infected by zombie at (${this.xpos},${this.ypos})`);
+                        }
+                    }
+                }
+            }
+            
+            if (this.type == 2) {
+                // Human logic - panic when near zombies
+                for (let i = 0; i < num; i++) {
+                    if (beings[i] && beings[i].type == 1) { // If zombie
+                        let dist = abs(this.xpos - beings[i].xpos) + abs(this.ypos - beings[i].ypos);
+                        if (dist < 10) { // Zombie nearby
+                            this.active = 10;
+                            // Run away from zombie
+                            if (this.xpos < beings[i].xpos) this.xpos--;
+                            if (this.xpos > beings[i].xpos) this.xpos++;
+                            if (this.ypos < beings[i].ypos) this.ypos--;
+                            if (this.ypos > beings[i].ypos) this.ypos++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    function look(x, y, d, dist) {
+        for (let i = 0; i < dist; i++) {
+            if (d == 1) y--;
+            if (d == 2) x++;
+            if (d == 3) y++;
+            if (d == 4) x--;
+            
+            if (x > width-1 || x < 1 || y > height-1 || y < 1) {
+                return 3; // wall
+            } else if (get(x, y).toString() == wall.toString()) {
+                return 3; // wall
+            } else if (get(x, y).toString() == panichuman.toString()) {
+                return 4; // panicked human
+            } else if (get(x, y).toString() == human.toString()) {
+                return 2; // human
+            } else if (get(x, y).toString() == zombie.toString()) {
+                return 1; // zombie
+            }
+        }
+        return 0; // empty
+    }
+    
+    function setup() {
+        let cnv = createCanvas(500, 500);
+        cnv.parent('sketch-holder');
+        frameRate(30);
+        
+        // Make canvas focusable for key handling
+        cnv.attribute('tabindex', '0');
+        cnv.style('outline', 'none');
+        
+        // Initialize colors
+        human = color(200, 0, 200);
+        panichuman = color(255, 120, 255);
+        zombie = color(0, 255, 0); // Bright green zombies
+        wall = color(50, 50, 60);
+        
+        // Create beings array
+        for (let i = 0; i < maxBeings; i++) {
+            beings[i] = new Being();
+        }
+        
+        initSimulation();
+        
+        // Focus canvas for key handling
+        cnv.mousePressed(() => {
+            cnv.elt.focus();
+        });
+    }
+    
+    function draw() {
+        // Redraw background and walls every frame to prevent trails
+        background(0);
+        
+        // Draw walls (only once, not randomly every frame)
+        fill(wall);
+        stroke(0);
+        for (let wall of walls) {
+            rect(wall.x, wall.y, wall.w, wall.h);
+        }
+        
+        if (freeze == 0) {
+            for (let i = 0; i < num; i++) {
+                beings[i].move();
+            }
+            // Speed control (exponential, base 30, powers of 4)
+            if (speed == 1) {
+                frameRate(30);
+            } else if (speed == 2) {
+                frameRate(120);
+            } else if (speed == 3) {
+                frameRate(480);
+            } else if (speed == 4) {
+                frameRate(1920);
+            } else if (speed == 5) {
+                frameRate(7680);
+            } else {
+                frameRate(30);
+            }
+        }
+        
+        // Display stats
+        fill(255);
+        noStroke();
+        textSize(12);
+        text(`Population: ${num} | Speed: ${speed} | Panic: ${panic} | Freeze: ${freeze}`, 10, 20);
+        
+        // Draw all beings as visible circles
+        for (let i = 0; i < num; i++) {
+            let being = beings[i];
+            if (being.type == 1) {
+                fill(zombie);
+            } else if (being.active > 0) {
+                fill(panichuman);
+            } else {
+                fill(human);
+            }
+            noStroke();
+            ellipse(being.xpos, being.ypos, 6, 6);
+        }
+    }
+    
+    function keyPressed() {
+        console.log('Key pressed:', key); // Debug
+        
+        if (key == ' ') {
+            console.log('Space pressed - resetting infection');
+            // Regenerate buildings
+            generateWalls();
+            // Reset infection
+            for (let i = 0; i < num; i++) {
+                beings[i].uninfect();
+            }
+            // Infect first 5 beings to start with zombies
+            for (let i = 1; i <= 5; i++) {
+                beings[i].infect();
+            }
+            // Reposition all beings to ensure they're not in buildings
+            for (let i = 0; i < num; i++) {
+                beings[i].position();
+            }
+        }
+        if (key == 's' || key == 'S') {
+            speed++;
+            if (speed > 4) speed = 1;
+            console.log('Speed changed to:', speed);
+        }
+        if (key == 'p' || key == 'P') {
+            panic = 5 - panic;
+            console.log('Panic toggled to:', panic);
+        }
+        if (key == 'g' || key == 'G') {
+            if (zombie.toString() == color(0, 255, 0).toString()) {
+                zombie = color(155, 155, 155);
+            } else {
+                zombie = color(0, 255, 0);
+            }
+            console.log('Zombie color changed');
+        }
+        if (key == '+' && num < 4000) {
+            num += 100;
+            console.log('Population increased to:', num);
+        }
+        if (key == '-' && num > 100) {
+            num -= 100;
+            console.log('Population decreased to:', num);
+        }
+        if (key == 'z' || key == 'Z') {
+            freeze = 1 - freeze;
+            console.log('Freeze toggled to:', freeze);
+            // Don't call initSimulation when unpausing
+        }
+    }
+    
+    // Generate walls
+    function generateWalls() {
+        walls = [];
+        for (let i = 0; i < 100; i++) {
+            walls.push({
+                x: int(random(width-1)) + 1,
+                y: int(random(height-1)) + 1,
+                w: int(random(60)) + 10,
+                h: int(random(60)) + 10
+            });
+        }
+    }
+    
+    function initSimulation() {
+        generateWalls();
+        // Position all beings
+        for (let i = 0; i < maxBeings; i++) {
+            beings[i].position();
+        }
+        // Double-check and reposition any beings that ended up inside buildings
+        for (let i = 0; i < maxBeings; i++) {
+            let being = beings[i];
+            let insideBuilding = false;
+            for (let wall of walls) {
+                if (being.xpos >= wall.x && being.xpos < wall.x + wall.w &&
+                    being.ypos >= wall.y && being.ypos < wall.y + wall.h) {
+                    insideBuilding = true;
+                    break;
+                }
+            }
+            if (insideBuilding) {
+                being.position(); // Reposition if inside building
+            }
+        }
+        // Infect first 5 beings to start with zombies (like original)
+        for (let i = 1; i <= 5; i++) {
+            beings[i].infect();
+        }
+        freeze = 0;
+    }
+    </script>
+
+<div>
+    inspired by the 2003 Java applet by Kevan Davis, https://kevan.org/proce55ing/zombies/
+</div>
+<div>
+This software is licensed under the GNU General Public License v3.0.
+
+Any use or derivative work must include visible attribution to the original author in both source and user-facing materials in the format:
+
+"adapted from @monkeywidget via https://github.com/monkeywidget/p5-sketches"
+</div>
+</body>
+</body>
+</html>
