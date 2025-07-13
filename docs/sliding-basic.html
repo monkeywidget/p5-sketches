@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>15-Puzzle - Sliding Tile Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 {
+            color: #00ff00;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+        .instructions {
+            color: #cccccc;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        canvas {
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>15-Puzzle</h1>
+        <div class="instructions">
+            Swipe to move tiles. Complete the puzzle by arranging numbers 1-15 in order.
+        </div>
+        <div id="sketch-container"></div>
+    </div>
+
+    <script>
+        let tiles = [];
+        let emptyX, emptyY;
+        let gridSize = 4;
+        let tileSize;
+        let boardX, boardY;
+        let isDragging = false;
+        let dragStartX, dragStartY;
+        let dragStartTime;
+        let currentTile = null;
+        let velocity = { x: 0, y: 0 };
+        
+        // Colors for 8-bit aesthetic
+        const colors = {
+            background: '#1a1a1a',
+            tile: '#00ff00',
+            tileHover: '#00cc00',
+            tileActive: '#008800',
+            border: '#00ff00',
+            text: '#000000',
+            shadow: '#004400'
+        };
+
+        function setup() {
+            let canvas = createCanvas(400, 400);
+            canvas.parent('sketch-container');
+            
+            tileSize = width / gridSize;
+            boardX = (width - gridSize * tileSize) / 2;
+            boardY = (height - gridSize * tileSize) / 2;
+            
+            initializePuzzle();
+        }
+
+        function draw() {
+            background(colors.background);
+            drawPuzzle();
+            drawUI();
+        }
+
+        function initializePuzzle() {
+            // Create solved puzzle first
+            tiles = [];
+            for (let y = 0; y < gridSize; y++) {
+                tiles[y] = [];
+                for (let x = 0; x < gridSize; x++) {
+                    let value = y * gridSize + x + 1;
+                    if (value === 16) {
+                        tiles[y][x] = null; // Empty space
+                        emptyX = x;
+                        emptyY = y;
+                    } else {
+                        tiles[y][x] = value;
+                    }
+                }
+            }
+            
+            // Shuffle the puzzle
+            shufflePuzzle();
+        }
+
+        function shufflePuzzle() {
+            // Perform random moves to shuffle
+            for (let i = 0; i < 100; i++) {
+                let possibleMoves = getValidMoves();
+                if (possibleMoves.length > 0) {
+                    let randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                    moveTile(randomMove.x, randomMove.y);
+                }
+            }
+        }
+
+        function getValidMoves() {
+            let moves = [];
+            let directions = [
+                {x: 0, y: -1}, // up
+                {x: 0, y: 1},  // down
+                {x: -1, y: 0}, // left
+                {x: 1, y: 0}   // right
+            ];
+            
+            for (let dir of directions) {
+                let newX = emptyX + dir.x;
+                let newY = emptyY + dir.y;
+                if (newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize) {
+                    moves.push({x: newX, y: newY});
+                }
+            }
+            return moves;
+        }
+
+        function drawPuzzle() {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return;
+            
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (tiles[y] && tiles[y][x] !== null) {
+                        let tileX = boardX + x * tileSize;
+                        let tileY = boardY + y * tileSize;
+                        
+                        // Check if this tile is being dragged
+                        let isDraggingThis = (currentTile && currentTile.x === x && currentTile.y === y);
+                        
+                        // Determine tile color
+                        let tileColor = colors.tile;
+                        if (isDraggingThis) {
+                            tileColor = colors.tileActive;
+                        } else if (isMouseOverTile(x, y)) {
+                            tileColor = colors.tileHover;
+                        }
+                        
+                        // Draw tile with 8-bit aesthetic
+                        drawTile(tileX, tileY, tileSize, tiles[y][x], tileColor);
+                    }
+                }
+            }
+        }
+
+        function drawTile(x, y, size, value, color) {
+            // Main tile body
+            fill(color);
+            stroke(colors.border);
+            strokeWeight(2);
+            rect(x + 2, y + 2, size - 4, size - 4);
+            
+            // Pixelated shadow effect
+            fill(colors.shadow);
+            noStroke();
+            rect(x + 4, y + 4, size - 8, size - 8);
+            
+            // Text
+            fill(colors.text);
+            noStroke();
+            textAlign(CENTER, CENTER);
+            textSize(size * 0.3);
+            textStyle(BOLD);
+            text(value, x + size/2, y + size/2);
+        }
+
+        function drawUI() {
+            // Draw grid lines
+            stroke(colors.border);
+            strokeWeight(1);
+            for (let i = 0; i <= gridSize; i++) {
+                let pos = boardX + i * tileSize;
+                line(pos, boardY, pos, boardY + gridSize * tileSize);
+                line(boardX, boardY + i * tileSize, boardX + gridSize * tileSize, boardY + i * tileSize);
+            }
+        }
+
+        function isMouseOverTile(x, y) {
+            let mousePosX = mouseX - boardX;
+            let mousePosY = mouseY - boardY;
+            return mousePosX >= x * tileSize && mousePosX < (x + 1) * tileSize &&
+                   mousePosY >= y * tileSize && mousePosY < (y + 1) * tileSize;
+        }
+
+        function mousePressed() {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return;
+            
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (tiles[y] && tiles[y][x] !== null && isMouseOverTile(x, y)) {
+                        if (canMoveTile(x, y)) {
+                            isDragging = true;
+                            currentTile = {x: x, y: y};
+                            dragStartX = mouseX;
+                            dragStartY = mouseY;
+                            dragStartTime = millis();
+                            
+                            // Empty event handler for swipe start sound
+                            onSwipeStart();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        function mouseDragged() {
+            if (isDragging && currentTile) {
+                // Calculate velocity for swipe detection
+                let deltaTime = millis() - dragStartTime;
+                if (deltaTime > 0) {
+                    velocity.x = (mouseX - dragStartX) / deltaTime;
+                    velocity.y = (mouseY - dragStartY) / deltaTime;
+                }
+            }
+        }
+
+        function mouseReleased() {
+            if (isDragging && currentTile) {
+                // Calculate total distance moved
+                let dx = mouseX - dragStartX;
+                let dy = mouseY - dragStartY;
+                let distance = sqrt(dx * dx + dy * dy);
+                
+                // If moved enough distance, try to move the tile
+                if (distance > 10) { // Minimum drag distance
+                    // Determine primary direction of movement
+                    if (abs(dx) > abs(dy)) {
+                        // Horizontal movement
+                        if (dx > 0 && canMoveTile(currentTile.x, currentTile.y, 1, 0)) {
+                            moveTile(currentTile.x, currentTile.y);
+                        } else if (dx < 0 && canMoveTile(currentTile.x, currentTile.y, -1, 0)) {
+                            moveTile(currentTile.x, currentTile.y);
+                        }
+                    } else {
+                        // Vertical movement
+                        if (dy > 0 && canMoveTile(currentTile.x, currentTile.y, 0, 1)) {
+                            moveTile(currentTile.x, currentTile.y);
+                        } else if (dy < 0 && canMoveTile(currentTile.x, currentTile.y, 0, -1)) {
+                            moveTile(currentTile.x, currentTile.y);
+                        }
+                    }
+                }
+                
+                // Empty event handler for swipe end sound
+                onSwipeEnd();
+                
+                isDragging = false;
+                currentTile = null;
+            }
+        }
+
+        function canMoveTile(x, y, dirX = 0, dirY = 0) {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return false;
+            
+            // Check if tile is adjacent to empty space
+            let adjacentToEmpty = (abs(x - emptyX) + abs(y - emptyY)) === 1;
+            
+            if (dirX !== 0 || dirY !== 0) {
+                // Check if the direction would move the tile toward the empty space
+                let targetX = x + dirX;
+                let targetY = y + dirY;
+                return targetX === emptyX && targetY === emptyY;
+            }
+            
+            return adjacentToEmpty;
+        }
+
+        function moveTile(x, y) {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return;
+            
+            // Swap tile with empty space
+            tiles[emptyY][emptyX] = tiles[y][x];
+            tiles[y][x] = null;
+            emptyX = x;
+            emptyY = y;
+            
+            // Check if puzzle is solved
+            if (isPuzzleSolved()) {
+                console.log("Puzzle solved!");
+                // Could add celebration animation here
+            }
+        }
+
+        function isPuzzleSolved() {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return false;
+            
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    let expectedValue = y * gridSize + x + 1;
+                    if (x === gridSize - 1 && y === gridSize - 1) {
+                        // Last position should be empty
+                        if (tiles[y] && tiles[y][x] !== null) return false;
+                    } else {
+                        if (!tiles[y] || tiles[y][x] !== expectedValue) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        // Empty event handlers for sound integration
+        function onSwipeStart() {
+            // TODO: Add sound for swipe start
+            console.log("Swipe started");
+        }
+
+        function onSwipeEnd() {
+            // TODO: Add sound for swipe end
+            console.log("Swipe ended");
+        }
+
+        // Keyboard controls for accessibility
+        function keyPressed() {
+            let moved = false;
+            
+            if (keyCode === UP_ARROW) {
+                if (emptyY < gridSize - 1) {
+                    moveTile(emptyX, emptyY + 1);
+                    moved = true;
+                }
+            } else if (keyCode === DOWN_ARROW) {
+                if (emptyY > 0) {
+                    moveTile(emptyX, emptyY - 1);
+                    moved = true;
+                }
+            } else if (keyCode === LEFT_ARROW) {
+                if (emptyX < gridSize - 1) {
+                    moveTile(emptyX + 1, emptyY);
+                    moved = true;
+                }
+            } else if (keyCode === RIGHT_ARROW) {
+                if (emptyX > 0) {
+                    moveTile(emptyX - 1, emptyY);
+                    moved = true;
+                }
+            } else if (key === 'r' || key === 'R') {
+                // Reset puzzle
+                initializePuzzle();
+                moved = true;
+            }
+            
+            if (moved) {
+                onSwipeEnd();
+            }
+        }
+    </script>
+</body>
+</html>
