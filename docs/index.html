@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>p5.js Sketches Gallery</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .header h1 {
+            font-size: 3.5rem;
+            color: white;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.9);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .sketch-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sketch-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .sketch-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+        }
+
+        .sketch-card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .sketch-card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .sketch-link {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .sketch-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+            color: rgba(255,255,255,0.8);
+            font-size: 0.9rem;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5rem;
+            }
+            
+            .gallery {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .container {
+                padding: 20px 15px;
+            }
+        }
+
+        .emoji {
+            font-size: 1.2em;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 p5.js Sketches Gallery</h1>
+            <p>Explore a collection of creative and interactive p5.js sketches. Each sketch demonstrates different aspects of creative coding, from simple animations to complex mathematical visualizations.</p>
+        </div>
+
+        <div class="gallery">
+            <div class="sketch-card">
+                <h2><span class="emoji">🌈</span>Colorful Circles</h2>
+                <p>An interactive animation featuring colorful bouncing circles with pulsing effects and glow. Click anywhere to add more circles and watch them bounce around the canvas.</p>
+                <a href="bouncing circles.html" class="sketch-link">Launch Sketch</a>
+            </div>
+
+            <div class="sketch-card">
+                <h2><span class="emoji">🧬</span>Conway's Game of Life</h2>
+                <p>A cellular automaton implementation using circular cells. Watch as cells live, die, and reproduce according to Conway's rules. Click to randomize the initial state.</p>
+                <a href="conways life.html" class="sketch-link">Launch Sketch</a>
+            </div>
+
+            <div class="sketch-card">
+                <h2><span class="emoji">🎲</span>2D Hilbert Cube</h2>
+                <p>A mesmerizing 3D cube with Hilbert curves drawn on its faces. The cube rotates continuously, showcasing mathematical beauty through space-filling curves.</p>
+                <a href="2 hilbert cube.html" class="sketch-link">Launch Sketch</a>
+            </div>
+
+            <div class="sketch-card">
+                <h2><span class="emoji">🧟</span>Zombies</h2>
+                <p>An interactive zombie-themed sketch with dynamic animations and effects. Experience the creative possibilities of p5.js in this engaging simulation.</p>
+                <a href="zombies.html" class="sketch-link">Launch Sketch</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>All sketches are licensed under the GNU General Public License v3.0</p>
+            <p>Adapted from <a href="https://github.com/monkeywidget/p5-sketches" target="_blank">@monkeywidget</a></p>
+        </div>
+    </div>
+</body>
+</html> 
