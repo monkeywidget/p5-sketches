@@ -1,0 +1,39 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# macOS folder attributes
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+
+# p5.js Web Editor / Browsersync temp files
+*.tmp
+*.log
+*.bak
+
+# Node dependencies (if you use npm for local servers or build tools)
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# VSCode or other editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# p5.js build output (if you're compiling or bundling)
+dist/
+build/
+
+# Misc
+*.zip
+*.orig
+*.sass-cache/
+.cache/
+.env
