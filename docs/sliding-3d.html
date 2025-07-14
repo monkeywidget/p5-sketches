@@ -53,7 +53,6 @@
         let boardX, boardY;
         let isDragging = false;
         let dragStartTime;
-        let velocity = { x: 0, y: 0 };
         let lastMouseX, lastMouseY;
         let isTouch = false;
         let tilePosition = { x: 0, y: 0 }; // Current visual position of dragged tile
@@ -210,6 +209,7 @@
         }
         
         function occupied(x, y) {
+            // Check if position is occupied by a tile on the board
             return tiles[y] && tiles[y][x] !== null;
         }
         
@@ -218,217 +218,83 @@
             
             let mousePos = getMousePosition();
             
-            // Calculate where the mouse wants to move the tile
-            let targetX = mousePos.x - (boardX + draggedTile.gridX * tileSize + tileSize / 2);
-            let targetY = mousePos.y - (boardY + draggedTile.gridY * tileSize + tileSize / 2);
+            // Calculate the delta movement from the last mouse position
+            let deltaX = mousePos.x - lastMouseX;
+            let deltaY = mousePos.y - lastMouseY;
             
             // Constrain to maximum movement range
             let maxMovement = tileSize;
-            targetX = constrain(targetX, -maxMovement, maxMovement);
-            targetY = constrain(targetY, -maxMovement, maxMovement);
+            deltaX = constrain(deltaX, -maxMovement, maxMovement);
+            deltaY = constrain(deltaY, -maxMovement, maxMovement);
             
-            return { x: targetX, y: targetY };
+            // Debug: log the movement
+            console.log("Movement request:", {x: deltaX, y: deltaY});
+            
+            return { x: deltaX, y: deltaY };
         }
         
-        function checkNeighborsForBlockedDirections(gridX, gridY) {
-            let neighbors = neighborsOf(gridX, gridY);
-            let blocked = {
-                left: false,
-                right: false,
-                up: false,
-                down: false
-            };
-            
-            // Check each neighbor for occupancy
-            for (let neighbor of neighbors) {
-                if (occupied(neighbor.x, neighbor.y)) {
-                    // Determine which direction this neighbor is in
-                    let dx = neighbor.x - gridX;
-                    let dy = neighbor.y - gridY;
-                    
-                    if (dx === -1) blocked.left = true;
-                    if (dx === 1) blocked.right = true;
-                    if (dy === -1) blocked.up = true;
-                    if (dy === 1) blocked.down = true;
-                }
-            }
-            
-            // Block movement off the board edges
-            if (gridX === 0) blocked.left = true;      // Can't move left off left edge
-            if (gridX === gridSize - 1) blocked.right = true;  // Can't move right off right edge
-            if (gridY === 0) blocked.up = true;         // Can't move up off top edge
-            if (gridY === gridSize - 1) blocked.down = true;   // Can't move down off bottom edge
-            
-            return blocked;
-        }
-        
-        function getOccupiedPositions() {
-            // Calculate the tile's current visual position
-            let tileLeft = boardX + draggedTile.gridX * tileSize + tilePosition.x;
-            let tileTop = boardY + draggedTile.gridY * tileSize + tilePosition.y;
-            let tileRight = tileLeft + tileSize;
-            let tileBottom = tileTop + tileSize;
-            
-            // Find which grid positions the tile's corners occupy
-            let positions = new Set();
-            
-            // Check all four corners of the tile
-            let corners = [
-                {x: tileLeft, y: tileTop},     // Top-left
-                {x: tileRight, y: tileTop},    // Top-right
-                {x: tileLeft, y: tileBottom},  // Bottom-left
-                {x: tileRight, y: tileBottom}  // Bottom-right
-            ];
-            
-            for (let corner of corners) {
-                let gridX = floor((corner.x - boardX) / tileSize);
-                let gridY = floor((corner.y - boardY) / tileSize);
-                
-                // Constrain to bounds
-                gridX = constrain(gridX, 0, gridSize - 1);
-                gridY = constrain(gridY, 0, gridSize - 1);
-                
-                positions.add(`${gridX},${gridY}`);
-            }
-            
-            // Convert Set back to array of objects
-            let occupiedPositions = [];
-            for (let pos of positions) {
-                let [x, y] = pos.split(',').map(Number);
-                occupiedPositions.push({x: x, y: y});
-            }
-            
-            return occupiedPositions;
-        }
-        
-        function getPrimaryPositions() {
-            // Calculate the tile's center position
-            let tileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + tilePosition.x;
-            let tileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + tilePosition.y;
-            
-            // Find the primary grid position (where the center is)
-            let primaryX = floor((tileCenterX - boardX) / tileSize);
-            let primaryY = floor((tileCenterY - boardY) / tileSize);
-            
-            // Constrain to bounds
-            primaryX = constrain(primaryX, 0, gridSize - 1);
-            primaryY = constrain(primaryY, 0, gridSize - 1);
-            
-            let positions = [{x: primaryX, y: primaryY}];
-            
-            // If the tile is straddling two positions, add the secondary position
-            let tileLeft = boardX + draggedTile.gridX * tileSize + tilePosition.x;
-            let tileTop = boardY + draggedTile.gridY * tileSize + tilePosition.y;
-            let tileRight = tileLeft + tileSize;
-            let tileBottom = tileTop + tileSize;
-            
-            // Check if the tile extends into another position
-            let leftGridX = floor((tileLeft - boardX) / tileSize);
-            let topGridY = floor((tileTop - boardY) / tileSize);
-            let rightGridX = floor((tileRight - boardX) / tileSize);
-            let bottomGridY = floor((tileBottom - boardY) / tileSize);
-            
-            // Constrain to bounds
-            leftGridX = constrain(leftGridX, 0, gridSize - 1);
-            topGridY = constrain(topGridY, 0, gridSize - 1);
-            rightGridX = constrain(rightGridX, 0, gridSize - 1);
-            bottomGridY = constrain(bottomGridY, 0, gridSize - 1);
-            
-            // If the tile spans multiple grid positions, add the secondary position
-            if (leftGridX !== rightGridX || topGridY !== bottomGridY) {
-                // Find the secondary position (the one not occupied by the center)
-                let secondaryX = (primaryX === leftGridX) ? rightGridX : leftGridX;
-                let secondaryY = (primaryY === topGridY) ? bottomGridY : topGridY;
-                
-                // Only add if it's different from the primary position
-                if (secondaryX !== primaryX || secondaryY !== primaryY) {
-                    positions.push({x: secondaryX, y: secondaryY});
-                }
-            }
-            
-            return positions;
-        }
-        
-        function blockedDirections(currentGridX, currentGridY) {
-            // Get the primary positions the tile occupies (at most 2)
-            let primaryPositions = getPrimaryPositions();
-            
-            let blocked = {
-                left: false,
-                right: false,
-                up: false,
-                down: false
-            };
-            
-            // Check neighbors of primary positions only
-            for (let pos of primaryPositions) {
-                let posBlocked = checkNeighborsForBlockedDirections(pos.x, pos.y);
-                
-                // Logical OR with existing blocked directions
-                blocked.left = blocked.left || posBlocked.left;
-                blocked.right = blocked.right || posBlocked.right;
-                blocked.up = blocked.up || posBlocked.up;
-                blocked.down = blocked.down || posBlocked.down;
-            }
-            
-            return blocked;
-        }
+
         
         function constrainMovement() {
             if (!draggedTile) return { x: 0, y: 0 };
             
-            // Get the movement request from mouse
+            // Get the requested movement (at most one X value and one Y value)
             let movement = movementRequest();
             
-            // Determine which grid position the tile is currently closest to
-            // Since the tile is no longer on the board, calculate position purely from visual position
+            // Calculate current tile center position
             let currentTileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + tilePosition.x;
             let currentTileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + tilePosition.y;
+            
+            // Calculate current grid position
             let currentGridX = floor((currentTileCenterX - boardX) / tileSize);
             let currentGridY = floor((currentTileCenterY - boardY) / tileSize);
-            
-            // Constrain current grid position to bounds
             currentGridX = constrain(currentGridX, 0, gridSize - 1);
             currentGridY = constrain(currentGridY, 0, gridSize - 1);
             
-            // Note: We don't update draggedTile.gridX/Y here to avoid circular dependency
+            // Check movement in each direction
+            movement.x = checkDirectionalMovement(movement.x, currentGridX, currentGridY, 'x');
+            movement.y = checkDirectionalMovement(movement.y, currentGridX, currentGridY, 'y');
             
-            // Get blocked directions for current position
-            let blocked = blockedDirections(currentGridX, currentGridY);
-            
-            // Prevent movement in blocked directions
-            if (movement.x < 0 && blocked.left) {
-                movement.x = constrain(movement.x, 0, tileSize); // Can't move left
-            } else if (movement.x > 0 && blocked.right) {
-                movement.x = constrain(movement.x, -tileSize, 0); // Can't move right
-            }
-            
-            if (movement.y < 0 && blocked.up) {
-                movement.y = constrain(movement.y, 0, tileSize); // Can't move up
-            } else if (movement.y > 0 && blocked.down) {
-                movement.y = constrain(movement.y, -tileSize, 0); // Can't move down
-            }
-            
-            // Additional bounds checking to prevent tiles from moving off the board
-            let newTileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + movement.x;
-            let newTileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + movement.y;
-            let newGridX = floor((newTileCenterX - boardX) / tileSize);
-            let newGridY = floor((newTileCenterY - boardY) / tileSize);
-            
-            // If the new position would be outside bounds, constrain the movement
-            if (newGridX < 0) {
-                movement.x = constrain(movement.x, -tileSize, 0); // Can't move left off board
-            } else if (newGridX >= gridSize) {
-                movement.x = constrain(movement.x, 0, tileSize); // Can't move right off board
-            }
-            
-            if (newGridY < 0) {
-                movement.y = constrain(movement.y, -tileSize, 0); // Can't move up off board
-            } else if (newGridY >= gridSize) {
-                movement.y = constrain(movement.y, 0, tileSize); // Can't move down off board
-            }
+            console.log("Movement:", movement);
             
             return movement;
+        }
+        
+        function checkDirectionalMovement(movementValue, gridX, gridY, axis) {
+            if (movementValue === 0) return movementValue;
+            
+            let direction = movementValue > 0 ? 1 : -1;
+            let isBlocked = false;
+            
+            // Check border
+            let borderCheck = axis === 'x' ? gridX : gridY;
+            if ((direction === -1 && borderCheck === 0) || 
+                (direction === 1 && borderCheck === gridSize - 1)) {
+                isBlocked = true;
+            }
+            
+            // Check neighboring tiles
+            if (!isBlocked) {
+                let checkPos = axis === 'x' ? gridX + direction : gridY + direction;
+                let checkX = axis === 'x' ? checkPos : gridX;
+                let checkY = axis === 'y' ? checkPos : gridY;
+                
+                if (checkPos >= 0 && checkPos < gridSize && occupied(checkX, checkY)) {
+                    isBlocked = true;
+                }
+            }
+            
+            // Apply blocking
+            if (isBlocked) {
+                // Block movement in the direction that would cause collision
+                if (movementValue > 0) {
+                    return constrain(movementValue, -tileSize, 0); // Can't move positive
+                } else {
+                    return constrain(movementValue, 0, tileSize); // Can't move negative
+                }
+            }
+            
+            return movementValue;
         }
 
         function snapToDestination(destination) {
@@ -441,9 +307,13 @@
         }
         
         function startSnapAnimation(targetSpace) {
+            // Calculate the current visual position of the dragged tile
+            let currentTileX = boardX + draggedTile.gridX * tileSize + tilePosition.x;
+            let currentTileY = boardY + draggedTile.gridY * tileSize + tilePosition.y;
+            
             let startPos = {
-                x: boardX + draggedTile.gridX * tileSize + tilePosition.x,
-                y: boardY + draggedTile.gridY * tileSize + tilePosition.y
+                x: currentTileX,
+                y: currentTileY
             };
             let endPos = {
                 x: boardX + targetSpace.x * tileSize,
@@ -486,7 +356,7 @@
                 currentY += wiggleOffset.y;
             }
             
-            // Update tile position
+            // Update tile position relative to the original grid position
             tilePosition.x = currentX - (boardX + draggedTile.gridX * tileSize);
             tilePosition.y = currentY - (boardY + draggedTile.gridY * tileSize);
         }
@@ -630,8 +500,31 @@
 
         function drawTilesInMotion() {
             if (draggedTile) {
-                let tileX = boardX + draggedTile.gridX * tileSize + tilePosition.x;
-                let tileY = boardY + draggedTile.gridY * tileSize + tilePosition.y;
+                let tileX, tileY;
+                
+                if (snapAnimation) {
+                    // During snap animation, use the interpolated position
+                    let elapsed = millis() - snapAnimation.startTime;
+                    let progress = elapsed / snapAnimation.duration;
+                    let easedProgress = 1 - pow(1 - progress, 3); // Ease out
+                    
+                    let currentX = lerp(snapAnimation.startX, snapAnimation.endX, easedProgress);
+                    let currentY = lerp(snapAnimation.startY, snapAnimation.endY, easedProgress);
+                    
+                    // Add wiggle effect
+                    if (progress > 0.85) {
+                        let wiggleOffset = calculateWiggleOffset(progress);
+                        currentX += wiggleOffset.x;
+                        currentY += wiggleOffset.y;
+                    }
+                    
+                    tileX = currentX;
+                    tileY = currentY;
+                } else {
+                    // Normal dragging - use tilePosition offset
+                    tileX = boardX + draggedTile.gridX * tileSize + tilePosition.x;
+                    tileY = boardY + draggedTile.gridY * tileSize + tilePosition.y;
+                }
                 
                 // Draw dragged tile
                 drawBeveledTile(tileX, tileY, tileSize, draggedTile.value, colors.tileActive);
@@ -806,34 +699,17 @@
             if (isDragging && draggedTile) {
                 let mousePos = getMousePosition();
                 
-                // Calculate velocity for continuous movement
-                let deltaTime = millis() - dragStartTime;
-                if (deltaTime > 0) {
-                    velocity.x = (mousePos.x - lastMouseX) / deltaTime;
-                    velocity.y = (mousePos.y - lastMouseY) / deltaTime;
-                }
-                
                 // Calculate total distance moved from last position
                 let dx = mousePos.x - lastMouseX;
                 let dy = mousePos.y - lastMouseY;
                 let distance = sqrt(dx * dx + dy * dy);
                 
                 // Get constrained movement
-                let constrainedPosition = constrainMovement();
+                let constrainedMovement = constrainMovement();
                 
-                // Update visual position for smooth movement
-                tilePosition.x = constrainedPosition.x;
-                tilePosition.y = constrainedPosition.y;
-                
-                // Update the dragged tile's grid position to reflect its current position
-                let currentTileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + tilePosition.x;
-                let currentTileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + tilePosition.y;
-                let currentGridX = floor((currentTileCenterX - boardX) / tileSize);
-                let currentGridY = floor((currentTileCenterY - boardY) / tileSize);
-                currentGridX = constrain(currentGridX, 0, gridSize - 1);
-                currentGridY = constrain(currentGridY, 0, gridSize - 1);
-                draggedTile.gridX = currentGridX;
-                draggedTile.gridY = currentGridY;
+                // Accumulate the movement to the tile position
+                tilePosition.x += constrainedMovement.x;
+                tilePosition.y += constrainedMovement.y;
                 
                 // State machine for tile movement
                 if (tileState === 'idle') {
