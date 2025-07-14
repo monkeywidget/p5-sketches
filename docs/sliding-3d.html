@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>15-Puzzle - Sliding Tile Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 {
+            color: #00ff00;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+        .instructions {
+            color: #cccccc;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        canvas {
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>15-Puzzle</h1>
+        <div class="instructions">
+            Swipe to move tiles. Complete the puzzle by arranging numbers in order.<br>
+            Arrow keys: Move tiles. R: Reset. 1-4: Change number of empty spaces.
+        </div>
+        <div id="sketch-container"></div>
+    </div>
+
+    <script>
+        let tiles = [];
+        let emptyPositions = []; // Array of {x, y} objects for multiple empty spaces
+        let gridSize = 4;
+        let tileSize;
+        let boardX, boardY;
+        let isDragging = false;
+        let dragStartTime;
+        let velocity = { x: 0, y: 0 };
+        let lastMouseX, lastMouseY;
+        let isTouch = false;
+        let tilePosition = { x: 0, y: 0 }; // Current visual position of dragged tile
+        let tileState = 'idle'; // 'idle', 'moving', 'snapping'
+        let draggedTile = null; // The tile being dragged (contains value, gridX, gridY)
+        let numEmptySpaces = 2; // Number of empty spaces to create (can be changed)
+        let snapAnimation = null; // Animation state for snapping
+        
+        // Colors for 8-bit aesthetic
+        const colors = {
+            background: '#1a1a1a',
+            board: '#a8c8d8', // Chalky light blue
+            boardInset: '#8bb8c8', // Slightly darker chalky blue
+            boardHighlight: '#c8d8e8', // Lighter chalky blue for highlights
+            boardShadow: '#7898a8', // Darker chalky blue for shadows
+            tile: '#b8c8a8', // Light sand green
+            tileHover: '#c8d8b8', // Lighter sand green for hover
+            tileActive: '#a8b898', // Darker sand green for active
+            border: '#2d4a3d', // Deep pine green
+            text: '#2d4a3d', // Deep pine green for text
+            shadow: '#8ba898' // Muted green shadow
+        };
+
+        function setup() {
+            let canvas = createCanvas(400, 400);
+            canvas.parent('sketch-container');
+            
+            tileSize = width / gridSize;
+            boardX = (width - gridSize * tileSize) / 2;
+            boardY = (height - gridSize * tileSize) / 2;
+            
+            initializePuzzleBoard();
+        }
+
+        function draw() {
+            background(colors.background);
+            drawPuzzleBorder(); // Draw border first (underneath)
+            drawPuzzleBoard(); // Draw board and tiles on top
+            
+            // Update snap animation if active
+            if (snapAnimation) {
+                updateSnapAnimation();
+            }
+        }
+
+        function initializePuzzleBoard() {
+            // Create solved puzzle first
+            tiles = [];
+            emptyPositions = [];
+            
+            // Create a solved puzzle with all tiles in order
+            let tileValues = [];
+            for (let i = 1; i <= gridSize * gridSize; i++) {
+                tileValues.push(i);
+            }
+            
+            // Place tiles in the grid
+            for (let y = 0; y < gridSize; y++) {
+                tiles[y] = [];
+                for (let x = 0; x < gridSize; x++) {
+                    let index = y * gridSize + x;
+                    if (index < tileValues.length) {
+                        tiles[y][x] = tileValues[index];
+                    } else {
+                        tiles[y][x] = null; // Empty space
+                        emptyPositions.push({x: x, y: y});
+                    }
+                }
+            }
+            
+            // Create additional empty spaces if needed
+            createEmptySpaces();
+            
+            // Shuffle the puzzle
+            shufflePuzzleTiles();
+        }
+
+        function createEmptySpaces() {
+            // Clear existing empty positions
+            emptyPositions = [];
+            
+            // Remove tiles to create empty spaces
+            let tilesToRemove = numEmptySpaces;
+            let removedCount = 0;
+            
+            // Start from the end of the grid and work backwards
+            for (let y = gridSize - 1; y >= 0 && removedCount < tilesToRemove; y--) {
+                for (let x = gridSize - 1; x >= 0 && removedCount < tilesToRemove; x--) {
+                    if (tiles[y][x] !== null) {
+                        tiles[y][x] = null;
+                        emptyPositions.push({x: x, y: y});
+                        removedCount++;
+                    }
+                }
+            }
+        }
+
+        function shufflePuzzleTiles() {
+            // Perform random moves to shuffle
+            for (let i = 0; i < 100; i++) {
+                let possibleMoves = getValidMoves();
+                if (possibleMoves.length > 0) {
+                    let randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                    moveTile(randomMove.x, randomMove.y);
+                }
+            }
+        }
+
+        function getValidMoves() {
+            let moves = [];
+            let directions = [
+                {x: 0, y: -1}, // up
+                {x: 0, y: 1},  // down
+                {x: -1, y: 0}, // left
+                {x: 1, y: 0}   // right
+            ];
+            
+            // Check all empty positions for valid moves
+            for (let emptyPos of emptyPositions) {
+                for (let dir of directions) {
+                    let newX = emptyPos.x + dir.x;
+                    let newY = emptyPos.y + dir.y;
+                    if (newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize) {
+                        // Check if this position has a tile (not already empty)
+                        if (tiles[newY] && tiles[newY][newX] !== null) {
+                            moves.push({x: newX, y: newY});
+                        }
+                    }
+                }
+            }
+            return moves;
+        }
+
+        function neighborsOf(x, y) {
+            let neighbors = [];
+            let directions = [
+                {x: -1, y: 0},
+                {x: 1, y: 0},
+                {x: 0, y: -1},
+                {x: 0, y: 1}
+            ];
+            
+            for (let dir of directions) {
+                let neighborX = x + dir.x;
+                let neighborY = y + dir.y;
+                
+                // Check if position is within board bounds
+                if (neighborX >= 0 && neighborX < gridSize && neighborY >= 0 && neighborY < gridSize) {
+                    neighbors.push({x: neighborX, y: neighborY});
+                }
+            }
+            
+            return neighbors;
+        }
+        
+        function occupied(x, y) {
+            return tiles[y] && tiles[y][x] !== null;
+        }
+        
+        function movementRequest() {
+            if (!draggedTile) return { x: 0, y: 0 };
+            
+            let mousePos = getMousePosition();
+            
+            // Calculate where the mouse wants to move the tile
+            let targetX = mousePos.x - (boardX + draggedTile.gridX * tileSize + tileSize / 2);
+            let targetY = mousePos.y - (boardY + draggedTile.gridY * tileSize + tileSize / 2);
+            
+            // Constrain to maximum movement range
+            let maxMovement = tileSize;
+            targetX = constrain(targetX, -maxMovement, maxMovement);
+            targetY = constrain(targetY, -maxMovement, maxMovement);
+            
+            return { x: targetX, y: targetY };
+        }
+        
+        function checkNeighborsForBlockedDirections(gridX, gridY) {
+            let neighbors = neighborsOf(gridX, gridY);
+            let blocked = {
+                left: false,
+                right: false,
+                up: false,
+                down: false
+            };
+            
+            // Check each neighbor for occupancy
+            for (let neighbor of neighbors) {
+                if (occupied(neighbor.x, neighbor.y)) {
+                    // Determine which direction this neighbor is in
+                    let dx = neighbor.x - gridX;
+                    let dy = neighbor.y - gridY;
+                    
+                    if (dx === -1) blocked.left = true;
+                    if (dx === 1) blocked.right = true;
+                    if (dy === -1) blocked.up = true;
+                    if (dy === 1) blocked.down = true;
+                }
+            }
+            
+            // Block movement off the board edges
+            if (gridX === 0) blocked.left = true;      // Can't move left off left edge
+            if (gridX === gridSize - 1) blocked.right = true;  // Can't move right off right edge
+            if (gridY === 0) blocked.up = true;         // Can't move up off top edge
+            if (gridY === gridSize - 1) blocked.down = true;   // Can't move down off bottom edge
+            
+            return blocked;
+        }
+        
+        function getOccupiedPositions() {
+            // Calculate the tile's current visual position
+            let tileLeft = boardX + draggedTile.gridX * tileSize + tilePosition.x;
+            let tileTop = boardY + draggedTile.gridY * tileSize + tilePosition.y;
+            let tileRight = tileLeft + tileSize;
+            let tileBottom = tileTop + tileSize;
+            
+            // Find which grid positions the tile's corners occupy
+            let positions = new Set();
+            
+            // Check all four corners of the tile
+            let corners = [
+                {x: tileLeft, y: tileTop},     // Top-left
+                {x: tileRight, y: tileTop},    // Top-right
+                {x: tileLeft, y: tileBottom},  // Bottom-left
+                {x: tileRight, y: tileBottom}  // Bottom-right
+            ];
+            
+            for (let corner of corners) {
+                let gridX = floor((corner.x - boardX) / tileSize);
+                let gridY = floor((corner.y - boardY) / tileSize);
+                
+                // Constrain to bounds
+                gridX = constrain(gridX, 0, gridSize - 1);
+                gridY = constrain(gridY, 0, gridSize - 1);
+                
+                positions.add(`${gridX},${gridY}`);
+            }
+            
+            // Convert Set back to array of objects
+            let occupiedPositions = [];
+            for (let pos of positions) {
+                let [x, y] = pos.split(',').map(Number);
+                occupiedPositions.push({x: x, y: y});
+            }
+            
+            return occupiedPositions;
+        }
+        
+        function getPrimaryPositions() {
+            // Calculate the tile's center position
+            let tileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + tilePosition.x;
+            let tileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + tilePosition.y;
+            
+            // Find the primary grid position (where the center is)
+            let primaryX = floor((tileCenterX - boardX) / tileSize);
+            let primaryY = floor((tileCenterY - boardY) / tileSize);
+            
+            // Constrain to bounds
+            primaryX = constrain(primaryX, 0, gridSize - 1);
+            primaryY = constrain(primaryY, 0, gridSize - 1);
+            
+            let positions = [{x: primaryX, y: primaryY}];
+            
+            // If the tile is straddling two positions, add the secondary position
+            let tileLeft = boardX + draggedTile.gridX * tileSize + tilePosition.x;
+            let tileTop = boardY + draggedTile.gridY * tileSize + tilePosition.y;
+            let tileRight = tileLeft + tileSize;
+            let tileBottom = tileTop + tileSize;
+            
+            // Check if the tile extends into another position
+            let leftGridX = floor((tileLeft - boardX) / tileSize);
+            let topGridY = floor((tileTop - boardY) / tileSize);
+            let rightGridX = floor((tileRight - boardX) / tileSize);
+            let bottomGridY = floor((tileBottom - boardY) / tileSize);
+            
+            // Constrain to bounds
+            leftGridX = constrain(leftGridX, 0, gridSize - 1);
+            topGridY = constrain(topGridY, 0, gridSize - 1);
+            rightGridX = constrain(rightGridX, 0, gridSize - 1);
+            bottomGridY = constrain(bottomGridY, 0, gridSize - 1);
+            
+            // If the tile spans multiple grid positions, add the secondary position
+            if (leftGridX !== rightGridX || topGridY !== bottomGridY) {
+                // Find the secondary position (the one not occupied by the center)
+                let secondaryX = (primaryX === leftGridX) ? rightGridX : leftGridX;
+                let secondaryY = (primaryY === topGridY) ? bottomGridY : topGridY;
+                
+                // Only add if it's different from the primary position
+                if (secondaryX !== primaryX || secondaryY !== primaryY) {
+                    positions.push({x: secondaryX, y: secondaryY});
+                }
+            }
+            
+            return positions;
+        }
+        
+        function blockedDirections(currentGridX, currentGridY) {
+            // Get the primary positions the tile occupies (at most 2)
+            let primaryPositions = getPrimaryPositions();
+            
+            let blocked = {
+                left: false,
+                right: false,
+                up: false,
+                down: false
+            };
+            
+            // Check neighbors of primary positions only
+            for (let pos of primaryPositions) {
+                let posBlocked = checkNeighborsForBlockedDirections(pos.x, pos.y);
+                
+                // Logical OR with existing blocked directions
+                blocked.left = blocked.left || posBlocked.left;
+                blocked.right = blocked.right || posBlocked.right;
+                blocked.up = blocked.up || posBlocked.up;
+                blocked.down = blocked.down || posBlocked.down;
+            }
+            
+            return blocked;
+        }
+        
+        function constrainMovement() {
+            if (!draggedTile) return { x: 0, y: 0 };
+            
+            // Get the movement request from mouse
+            let movement = movementRequest();
+            
+            // Determine which grid position the tile is currently closest to
+            // Since the tile is no longer on the board, calculate position purely from visual position
+            let currentTileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + tilePosition.x;
+            let currentTileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + tilePosition.y;
+            let currentGridX = floor((currentTileCenterX - boardX) / tileSize);
+            let currentGridY = floor((currentTileCenterY - boardY) / tileSize);
+            
+            // Constrain current grid position to bounds
+            currentGridX = constrain(currentGridX, 0, gridSize - 1);
+            currentGridY = constrain(currentGridY, 0, gridSize - 1);
+            
+            // Note: We don't update draggedTile.gridX/Y here to avoid circular dependency
+            
+            // Get blocked directions for current position
+            let blocked = blockedDirections(currentGridX, currentGridY);
+            
+            // Prevent movement in blocked directions
+            if (movement.x < 0 && blocked.left) {
+                movement.x = constrain(movement.x, 0, tileSize); // Can't move left
+            } else if (movement.x > 0 && blocked.right) {
+                movement.x = constrain(movement.x, -tileSize, 0); // Can't move right
+            }
+            
+            if (movement.y < 0 && blocked.up) {
+                movement.y = constrain(movement.y, 0, tileSize); // Can't move up
+            } else if (movement.y > 0 && blocked.down) {
+                movement.y = constrain(movement.y, -tileSize, 0); // Can't move down
+            }
+            
+            // Additional bounds checking to prevent tiles from moving off the board
+            let newTileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + movement.x;
+            let newTileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + movement.y;
+            let newGridX = floor((newTileCenterX - boardX) / tileSize);
+            let newGridY = floor((newTileCenterY - boardY) / tileSize);
+            
+            // If the new position would be outside bounds, constrain the movement
+            if (newGridX < 0) {
+                movement.x = constrain(movement.x, -tileSize, 0); // Can't move left off board
+            } else if (newGridX >= gridSize) {
+                movement.x = constrain(movement.x, 0, tileSize); // Can't move right off board
+            }
+            
+            if (newGridY < 0) {
+                movement.y = constrain(movement.y, -tileSize, 0); // Can't move up off board
+            } else if (newGridY >= gridSize) {
+                movement.y = constrain(movement.y, 0, tileSize); // Can't move down off board
+            }
+            
+            return movement;
+        }
+
+        function snapToDestination(destination) {
+            let currentCenter = getTileCenterPosition(draggedTile.gridX, draggedTile.gridY, tilePosition.x, tilePosition.y);
+            let targetGridX = floor((currentCenter.x - boardX) / tileSize);
+            let targetGridY = floor((currentCenter.y - boardY) / tileSize);
+            targetGridX = constrain(targetGridX, 0, gridSize - 1);
+            targetGridY = constrain(targetGridY, 0, gridSize - 1);
+            startSnapAnimation({x: targetGridX, y: targetGridY});
+        }
+        
+        function startSnapAnimation(targetSpace) {
+            let startPos = {
+                x: boardX + draggedTile.gridX * tileSize + tilePosition.x,
+                y: boardY + draggedTile.gridY * tileSize + tilePosition.y
+            };
+            let endPos = {
+                x: boardX + targetSpace.x * tileSize,
+                y: boardY + targetSpace.y * tileSize
+            };
+            
+            snapAnimation = {
+                startX: startPos.x,
+                startY: startPos.y,
+                endX: endPos.x,
+                endY: endPos.y,
+                progress: 0,
+                duration: 200,
+                startTime: millis(),
+                wigglePhase: 0
+            };
+            
+            tileState = 'snapping';
+        }
+        
+        function updateSnapAnimation() {
+            if (!snapAnimation) return;
+            
+            let elapsed = millis() - snapAnimation.startTime;
+            let progress = elapsed / snapAnimation.duration;
+            
+            if (progress >= 1) {
+                completeSnapAnimation();
+                return;
+            }
+            
+            let easedProgress = 1 - pow(1 - progress, 3); // Ease out
+            let currentX = lerp(snapAnimation.startX, snapAnimation.endX, easedProgress);
+            let currentY = lerp(snapAnimation.startY, snapAnimation.endY, easedProgress);
+            
+            // Add wiggle effect
+            if (progress > 0.85) {
+                let wiggleOffset = calculateWiggleOffset(progress);
+                currentX += wiggleOffset.x;
+                currentY += wiggleOffset.y;
+            }
+            
+            // Update tile position
+            tilePosition.x = currentX - (boardX + draggedTile.gridX * tileSize);
+            tilePosition.y = currentY - (boardY + draggedTile.gridY * tileSize);
+        }
+        
+        function calculateWiggleOffset(progress) {
+            let wiggleProgress = (progress - 0.85) / 0.15;
+            let travelDirection = {
+                x: snapAnimation.endX - snapAnimation.startX,
+                y: snapAnimation.endY - snapAnimation.startY
+            };
+            let travelDistance = sqrt(travelDirection.x * travelDirection.x + travelDirection.y * travelDirection.y);
+            
+            if (travelDistance > 0) {
+                let normalizedDirX = travelDirection.x / travelDistance;
+                let normalizedDirY = travelDirection.y / travelDistance;
+                let wiggleAmount = 0.5 * sin(wiggleProgress * PI * 3) * (1 - wiggleProgress);
+                
+                return {
+                    x: normalizedDirX * wiggleAmount,
+                    y: normalizedDirY * wiggleAmount
+                };
+            }
+            
+            return { x: 0, y: 0 };
+        }
+        
+        function completeSnapAnimation() {
+            // Calculate final position from animation
+            let finalX = snapAnimation.endX - boardX;
+            let finalY = snapAnimation.endY - boardY;
+            let gridX = floor(finalX / tileSize);
+            let gridY = floor(finalY / tileSize);
+            
+            // Ensure grid position is within bounds
+            gridX = constrain(gridX, 0, gridSize - 1);
+            gridY = constrain(gridY, 0, gridSize - 1);
+            
+            // Place dragged tile at final position
+            tiles[gridY][gridX] = draggedTile.value;
+            
+            // Clear dragged tile and animation
+            draggedTile = null;
+            snapAnimation = null;
+            
+            // Reset position
+            tilePosition = { x: 0, y: 0 };
+            
+            // Reset state
+            tileState = 'idle';
+            
+            // Check if puzzle is solved
+            if (isPuzzleSolved()) {
+                console.log("Puzzle solved!");
+            }
+        }
+
+        function drawPuzzleBoard() {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return;
+            
+            // Layer 1: Draw the board underneath
+            drawBoardSpaces();
+            
+            // Layer 2: Draw tiles at rest (not being moved)
+            drawTilesAtRest();
+            
+            // Layer 3: Draw tiles in motion
+            drawTilesInMotion();
+        }
+
+        function drawBoardSpaces() {
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    let posX = boardX + x * tileSize;
+                    let posY = boardY + y * tileSize;
+                    
+                    // Draw board position with beveled effect
+                    drawBeveledBoardSpace(posX, posY, tileSize);
+                }
+            }
+        }
+
+        function drawBeveledBoardSpace(x, y, size) {
+            // Base layer (darkest)
+            fill(colors.boardShadow);
+            noStroke();
+            rect(x, y, size, size);
+            
+            // Main board layer
+            fill(colors.board);
+            noStroke();
+            rect(x + 2, y + 2, size - 4, size - 4);
+            
+            // Shadow layer (top and left edges) - reversed for raised effect
+            fill(colors.boardShadow);
+            noStroke();
+            rect(x + 2, y + 2, size - 4, 2); // Top edge
+            rect(x + 2, y + 2, 2, size - 4); // Left edge
+            
+            // Highlight layer (bottom and right edges) - reversed for raised effect
+            fill(colors.boardHighlight);
+            noStroke();
+            rect(x + 2, y + size - 4, size - 4, 2); // Bottom edge
+            rect(x + size - 4, y + 2, 2, size - 4); // Right edge
+            
+            // Inset square (recessed effect)
+            fill(colors.boardInset);
+            noStroke();
+            let insetSize = size * 0.5;
+            let insetX = x + (size - insetSize) / 2;
+            let insetY = y + (size - insetSize) / 2;
+            
+            // Inset shadow (bottom and right edges)
+            fill(colors.boardShadow);
+            rect(insetX + 1, insetY + 1, insetSize, insetSize);
+            
+            // Inset main
+            fill(colors.boardInset);
+            rect(insetX, insetY, insetSize - 1, insetSize - 1);
+        }
+
+        function drawTilesAtRest() {
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (tiles[y] && tiles[y][x] !== null) {
+                        let tileX = boardX + x * tileSize;
+                        let tileY = boardY + y * tileSize;
+                        
+                        // Determine tile color
+                        let tileColor = colors.tile;
+                        if (isMouseOverTile(x, y)) {
+                            tileColor = colors.tileHover;
+                        }
+                        
+                        // Draw tile with 8-bit aesthetic (opaque)
+                        drawBeveledTile(tileX, tileY, tileSize, tiles[y][x], tileColor);
+                    }
+                }
+            }
+        }
+
+        function drawTilesInMotion() {
+            if (draggedTile) {
+                let tileX = boardX + draggedTile.gridX * tileSize + tilePosition.x;
+                let tileY = boardY + draggedTile.gridY * tileSize + tilePosition.y;
+                
+                // Draw dragged tile
+                drawBeveledTile(tileX, tileY, tileSize, draggedTile.value, colors.tileActive);
+            }
+        }
+
+        function drawBeveledTile(x, y, size, value, color) {
+            // Draw beveled tile with multi-layered effect
+            drawBeveledTileVisual(x, y, size, color);
+            
+            // Text
+            fill(colors.text);
+            noStroke();
+            textAlign(CENTER, CENTER);
+            textSize(size * 0.3);
+            textStyle(BOLD);
+            text(value, x + size/2, y + size/2);
+        }
+
+        function drawBeveledTileVisual(x, y, size, color) {
+            // Base layer (darkest shadow)
+            fill(colors.shadow);
+            noStroke();
+            rect(x, y, size, size);
+            
+            // Main tile layer
+            fill(color);
+            noStroke();
+            rect(x + 2, y + 2, size - 4, size - 4);
+            
+            // Highlight layer (top and left edges) - raised effect
+            fill(colors.tileHover); // Lighter green for highlight
+            noStroke();
+            rect(x + 2, y + 2, size - 4, 2); // Top edge
+            rect(x + 2, y + 2, 2, size - 4); // Left edge
+            
+            // Shadow layer (bottom and right edges) - raised effect
+            fill(colors.shadow);
+            noStroke();
+            rect(x + 2, y + size - 4, size - 4, 2); // Bottom edge
+            rect(x + size - 4, y + 2, 2, size - 4); // Right edge
+            
+            // Inner tile area (slightly recessed)
+            fill(color);
+            noStroke();
+            rect(x + 4, y + 4, size - 8, size - 8);
+        }
+
+        function drawPuzzleBorder() {
+            // Draw beveled border around the board
+            drawBeveledBorder();
+        }
+
+        function drawBeveledBorder() {
+            let borderX = boardX - 4;
+            let borderY = boardY - 4;
+            let borderWidth = gridSize * tileSize + 8;
+            let borderHeight = gridSize * tileSize + 8;
+            
+            // Base shadow layer
+            fill(colors.shadow);
+            noStroke();
+            rect(borderX, borderY, borderWidth, borderHeight);
+            
+            // Main border layer
+            fill(colors.border);
+            noStroke();
+            rect(borderX + 2, borderY + 2, borderWidth - 4, borderHeight - 4);
+            
+            // Highlight layer (top and left edges)
+            fill(colors.boardHighlight);
+            noStroke();
+            rect(borderX + 2, borderY + 2, borderWidth - 4, 2); // Top edge
+            rect(borderX + 2, borderY + 2, 2, borderHeight - 4); // Left edge
+            
+            // Shadow layer (bottom and right edges)
+            fill(colors.shadow);
+            noStroke();
+            rect(borderX + 2, borderY + borderHeight - 4, borderWidth - 4, 2); // Bottom edge
+            rect(borderX + borderWidth - 4, borderY + 2, 2, borderHeight - 4); // Right edge
+        }
+
+        function isMouseOverTile(x, y) {
+            let mousePosX = mouseX - boardX;
+            let mousePosY = mouseY - boardY;
+            return mousePosX >= x * tileSize && mousePosX < (x + 1) * tileSize &&
+                   mousePosY >= y * tileSize && mousePosY < (y + 1) * tileSize;
+        }
+
+        // Utility functions for common operations
+        function getMousePosition() {
+            // Handle both mouse and touch events
+            if (isTouch && touches.length > 0) {
+                return { x: touches[0].x, y: touches[0].y };
+            }
+            return { x: mouseX, y: mouseY };
+        }
+        
+        function getTileCenterPosition(gridX, gridY, offsetX = 0, offsetY = 0) {
+            return {
+                x: boardX + gridX * tileSize + tileSize / 2 + offsetX,
+                y: boardY + gridY * tileSize + tileSize / 2 + offsetY
+            };
+        }
+        
+
+        function isPositionInBounds(x, y) {
+            return x >= 0 && x < gridSize && y >= 0 && y < gridSize;
+        }
+        
+        function calculateDistance(pos1, pos2) {
+            return sqrt(
+                (pos1.x - pos2.x) * (pos1.x - pos2.x) +
+                (pos1.y - pos2.y) * (pos1.y - pos2.y)
+            );
+        }
+
+        function mousePressed() {
+            startTileDrag();
+        }
+
+        function touchStarted() {
+            isTouch = true;
+            startTileDrag();
+            return false; // Prevent default touch behavior
+        }
+
+        function startTileDrag() {
+            if (!tiles || tiles.length === 0) return;
+            
+            let mousePos = getMousePosition();
+            
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (tiles[y] && tiles[y][x] !== null && isMouseOverTile(x, y)) {
+                        if (canMoveTile(x, y)) {
+                            isDragging = true;
+                            draggedTile = {
+                                value: tiles[y][x],
+                                gridX: x,
+                                gridY: y
+                            };
+                            tiles[y][x] = null; // Remove from board immediately
+                            lastMouseX = mousePos.x;
+                            lastMouseY = mousePos.y;
+                            dragStartTime = millis();
+                            tilePosition = { x: 0, y: 0 };
+                            tileState = 'idle';
+                            
+                            // The original position is now unoccupied
+                            // This ensures the tile can move freely from its starting position
+                            
+                            onSwipeStart();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        function mouseDragged() {
+            handleTileDrag();
+        }
+
+        function touchMoved() {
+            isTouch = true;
+            handleTileDrag();
+            return false; // Prevent default touch behavior
+        }
+
+        function handleTileDrag() {
+            if (isDragging && draggedTile) {
+                let mousePos = getMousePosition();
+                
+                // Calculate velocity for continuous movement
+                let deltaTime = millis() - dragStartTime;
+                if (deltaTime > 0) {
+                    velocity.x = (mousePos.x - lastMouseX) / deltaTime;
+                    velocity.y = (mousePos.y - lastMouseY) / deltaTime;
+                }
+                
+                // Calculate total distance moved from last position
+                let dx = mousePos.x - lastMouseX;
+                let dy = mousePos.y - lastMouseY;
+                let distance = sqrt(dx * dx + dy * dy);
+                
+                // Get constrained movement
+                let constrainedPosition = constrainMovement();
+                
+                // Update visual position for smooth movement
+                tilePosition.x = constrainedPosition.x;
+                tilePosition.y = constrainedPosition.y;
+                
+                // Update the dragged tile's grid position to reflect its current position
+                let currentTileCenterX = boardX + draggedTile.gridX * tileSize + tileSize / 2 + tilePosition.x;
+                let currentTileCenterY = boardY + draggedTile.gridY * tileSize + tileSize / 2 + tilePosition.y;
+                let currentGridX = floor((currentTileCenterX - boardX) / tileSize);
+                let currentGridY = floor((currentTileCenterY - boardY) / tileSize);
+                currentGridX = constrain(currentGridX, 0, gridSize - 1);
+                currentGridY = constrain(currentGridY, 0, gridSize - 1);
+                draggedTile.gridX = currentGridX;
+                draggedTile.gridY = currentGridY;
+                
+                // State machine for tile movement
+                if (tileState === 'idle') {
+                    // Check if we've moved enough to start the movement
+                    if (distance > tileSize * 0.05) { // 5% threshold to start moving
+                        tileState = 'moving';
+                    }
+                } else if (tileState === 'moving') {
+                    // Tile is already removed from board and being moved
+                }
+                
+                lastMouseX = mousePos.x;
+                lastMouseY = mousePos.y;
+            }
+        }
+
+        function mouseReleased() {
+            endTileDrag();
+        }
+
+        function touchEnded() {
+            isTouch = true;
+            endTileDrag();
+            return false; // Prevent default touch behavior
+        }
+
+        function endTileDrag() {
+            if (isDragging && draggedTile) {
+                if (tileState === 'moving') {
+                    snapToDestination();
+                } else if (tileState === 'idle') {
+                    // If tile never moved, return it to original position
+                    tiles[draggedTile.gridY][draggedTile.gridX] = draggedTile.value;
+                    tilePosition = { x: 0, y: 0 };
+                    draggedTile = null;
+                    isDragging = false;
+                    isTouch = false;
+                }
+                
+                onSwipeEnd();
+                isDragging = false;
+                isTouch = false;
+            }
+        }
+
+        function canMoveTile(x, y) {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) {
+                console.log("Tiles not initialized");
+                return false;
+            }
+            
+            // Check if the position has a tile
+            if (!tiles[y] || tiles[y][x] === null) {
+                console.log("No tile at position", x, y);
+                return false;
+            }
+            
+            // All tiles are draggable - collision detection will handle invalid moves
+            return true;
+        }
+
+        function moveTile(x, y) {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return;
+            
+            // Check if the position has a tile
+            if (!tiles[y] || tiles[y][x] === null) return;
+            
+            // Find any adjacent empty space
+            let directions = [
+                {x: 0, y: -1}, // up
+                {x: 0, y: 1},  // down
+                {x: -1, y: 0}, // left
+                {x: 1, y: 0}   // right
+            ];
+            
+            for (let dir of directions) {
+                let newX = x + dir.x;
+                let newY = y + dir.y;
+                
+                // Check if the new position is within bounds
+                if (newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize) {
+                    // Check if the new position is empty
+                    if (!tiles[newY] || tiles[newY][newX] === null) {
+                        // Move tile to the empty space
+                        tiles[newY][newX] = tiles[y][x];
+                        tiles[y][x] = null;
+                        
+                        // Check if puzzle is solved
+                        if (isPuzzleSolved()) {
+                            console.log("Puzzle solved!");
+                        }
+                        return; // Move completed
+                    }
+                }
+            }
+        }
+
+        function isPuzzleSolved() {
+            // Safety check - make sure tiles are initialized
+            if (!tiles || tiles.length === 0) return false;
+            
+            // Create a solved puzzle pattern
+            let solvedPattern = [];
+            let tileValue = 1;
+            for (let y = 0; y < gridSize; y++) {
+                solvedPattern[y] = [];
+                for (let x = 0; x < gridSize; x++) {
+                    if (tileValue <= gridSize * gridSize - numEmptySpaces) {
+                        solvedPattern[y][x] = tileValue;
+                        tileValue++;
+                    } else {
+                        solvedPattern[y][x] = null;
+                    }
+                }
+            }
+            
+            // Check if current puzzle matches solved pattern
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (solvedPattern[y][x] !== tiles[y][x]) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        // Empty event handlers for sound integration
+        function onSwipeStart() {
+            // TODO: Add sound for swipe start
+            console.log("Swipe started");
+        }
+
+        function onSwipeEnd() {
+            // TODO: Add sound for swipe end
+            console.log("Swipe ended");
+        }
+
+        // Keyboard controls for accessibility
+        function keyPressed() {
+            let moved = false;
+            
+            if (keyCode === UP_ARROW) {
+                // Try to move tiles down into empty spaces above
+                for (let emptyPos of emptyPositions) {
+                    if (emptyPos.y > 0) {
+                        moveTile(emptyPos.x, emptyPos.y - 1);
+                        moved = true;
+                        break;
+                    }
+                }
+            } else if (keyCode === DOWN_ARROW) {
+                // Try to move tiles up into empty spaces below
+                for (let emptyPos of emptyPositions) {
+                    if (emptyPos.y < gridSize - 1) {
+                        moveTile(emptyPos.x, emptyPos.y + 1);
+                        moved = true;
+                        break;
+                    }
+                }
+            } else if (keyCode === LEFT_ARROW) {
+                // Try to move tiles right into empty spaces to the left
+                for (let emptyPos of emptyPositions) {
+                    if (emptyPos.x > 0) {
+                        moveTile(emptyPos.x - 1, emptyPos.y);
+                        moved = true;
+                        break;
+                    }
+                }
+            } else if (keyCode === RIGHT_ARROW) {
+                // Try to move tiles left into empty spaces to the right
+                for (let emptyPos of emptyPositions) {
+                    if (emptyPos.x < gridSize - 1) {
+                        moveTile(emptyPos.x + 1, emptyPos.y);
+                        moved = true;
+                        break;
+                    }
+                }
+            } else if (key === 'r' || key === 'R') {
+                // Reset puzzle
+                initializePuzzleBoard();
+                moved = true;
+            } else if (key === '1' || key === '2' || key === '3' || key === '4') {
+                // Change number of empty spaces
+                let newNumEmpty = parseInt(key);
+                if (newNumEmpty >= 1 && newNumEmpty <= 4) {
+                    numEmptySpaces = newNumEmpty;
+                    initializePuzzleBoard();
+                    moved = true;
+                }
+            }
+            
+            if (moved) {
+                onSwipeEnd();
+            }
+        }
+    </script>
+</body>
+</html>
+
